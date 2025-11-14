@@ -1,0 +1,110 @@
+escreva um programa em python que seja executado em linha de comando chamado get-judged.
+o programa tem o objetivo de raspar dados em uma página da internet.
+ele irá operar da forma a seguir:
+- receberá como um parâmetro um texto que servirá como texto de filtro
+- navegará paté a url "https://scon.stj.jus.br/SCON/"
+- preencherá o xpath "//*[@id="pesquisaLivre"]" o parâmetro recebido na linha de comando
+- pressionará o botão com xpath "//*[@id="frmConsulta"]/div[2]/div[2]/div[2]/div[1]/div/button"
+- esperará um minuto
+- clicará na tag A com xpath "//*[@id="DTPB"]"
+- preencherá o xpath "//*[@id='dtpb1Ref']" com a data do dia menos 5 anos no formato "dd/mm/aaaa"
+- preencherá o xpath "//*[@id='dtpb2Ref']" com a data do dia no formato "dd/mm/aaaa"
+- pressionará o botão com xpath "//*[@id='botaoAplicarFiltrosDTPB']"
+- crie um loop de processamento, mas que saia após um ciclo
+-- escreverá um arquivo tipo txt com o conteúdo da tab xpath "//*[@id='corpopaginajurisprudencia']/div[4]/div[2]"
+
+
+
+
+//*[@id="navegacao"]/div[2]/a[1]
+
+
+
+
+https://www.stj.jus.br/sites/portalp/Inicio
+//*[@id="menuprincipal"]/li[4]/a
+//*[@id="menuprincipal"]/li[4]/ul/li[1]/ul/li[1]/a
+
+
+
+
+
+
+
+-----------------------------------------------------------------------------------------------------------------
+
+
+https://datajud-wiki.cnj.jus.br/api-publica/termo-uso/
+https://datajud-wiki.cnj.jus.br/api-publica/endpoints
+https://www.stj.jus.br/sites/portalp/Processos/Consulta-Processual
+https://datajud-wiki.cnj.jus.br/api-publica/exemplos/exemplo1/
+
+
+
+https://dadosabertos.web.stj.jus.br/dataset/?tags=jurisprudencia
+
+https://dadosabertos.web.stj.jus.br/dataset/integras-de-decisoes-terminativas-e-acordaos-do-diario-da-justica
+
+
+
+
+https://dadosabertos.web.stj.jus.br/dataset/5ebbfe8a-05f3-4106-a160-794d91b740b8/resource/2cd91d5e-6d0a-4f09-b5ec-d531216dee28/download/20220508.zip
+https://dadosabertos.web.stj.jus.br/dataset/5ebbfe8a-05f3-4106-a160-794d91b740b8/resource/68565b13-18b5-4ac0-a556-e5c24178fa25/download/20220531.json
+https://dadosabertos.web.stj.jus.br/dataset/5ebbfe8a-05f3-4106-a160-794d91b740b8/resource/9cbc519d-b262-4894-8304-0c38d0f266ef/download/20220630.json
+https://dadosabertos.web.stj.jus.br/dataset/5ebbfe8a-05f3-4106-a160-794d91b740b8/resource/adec5f57-8267-4b4e-b233-56bbd973fbce/download/20230430.json
+
+
+
+
+
+
+----------------
+
+https://github.com/joaotextor/busca-processos-judiciais
+https://github.com/leonardomv1981/consulta-processo-judicial-apicnj
+https://github.com/jespimentel/api_cnj?tab=readme-ov-file
+https://github.com/jespimentel/api_cnj/tree/main
+https://www.tabnews.com.br/joaotextor/abstraindo-a-api-publica-do-cnj-datajud
+
+----------------
+
+https://www.youtube.com/watch?v=BoADSiUV-2o&t=553s
+
+
+https://dadosabertos.web.stj.jus.br/dataset/espelhos-de-acordaos-corte-especial
+https://dadosabertos.web.stj.jus.br/dataset/espelhos-de-acordaos-primeira-secao
+https://dadosabertos.web.stj.jus.br/dataset/a96a175b-a54b-4bfd-82b8-fcd7cc0200bc/resource/39e57080-cb3f-433c-8b86-a7736632109a/download/20220508.zip
+https://dadosabertos.web.stj.jus.br/dataset/a96a175b-a54b-4bfd-82b8-fcd7cc0200bc/resource/c2c1d8cb-57bf-476b-ae7f-1dbaf9695b2b/download/dicionario-espelhodoacordao.csv
+https://dadosabertos.web.stj.jus.br/dataset/a96a175b-a54b-4bfd-82b8-fcd7cc0200bc/resource/583dbe44-bd05-4482-96bd-5bdbca597d87/download/20220531.json
+https://dadosabertos.web.stj.jus.br/dataset/espelhos-de-acordaos-segunda-secao
+https://dadosabertos.web.stj.jus.br/dataset/espelhos-de-acordaos-terceira-secao
+
+https://dadosabertos.web.stj.jus.br/dataset/espelhos-de-acordaos-primeira-turma
+https://dadosabertos.web.stj.jus.br/dataset/a927747a-2fc9-46f7-be25-c3f12e7d560c/resource/1d88761b-c332-4995-952a-da4aea58bc33/download/20220508.zip
+https://dadosabertos.web.stj.jus.br/dataset/a927747a-2fc9-46f7-be25-c3f12e7d560c/resource/70e2f52f-d0d7-465b-8bfe-d74ce85190b2/download/dicionario-espelhodoacordao.csv
+https://dadosabertos.web.stj.jus.br/dataset/a927747a-2fc9-46f7-be25-c3f12e7d560c/resource/c739326f-8727-4c1f-99e8-202232aef125/download/20220531.json
+https://dadosabertos.web.stj.jus.br/dataset/espelhos-de-acordaos-segunda-turma
+https://dadosabertos.web.stj.jus.br/dataset/espelhos-de-acordaos-terceira-turma
+https://dadosabertos.web.stj.jus.br/dataset/espelhos-de-acordaos-quarta-turma
+https://dadosabertos.web.stj.jus.br/dataset/espelhos-de-acordaos-quinta-turma
+https://dadosabertos.web.stj.jus.br/dataset/espelhos-de-acordaos-sexta-turma
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

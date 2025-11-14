@@ -1,0 +1,63 @@
+escreva um programa em python que seja executado em linha de comando chamado get-opendata.
+o programa tem o objetivo de baixar arquivos em uma página da internet.
+ele irá operar da forma a seguir:
+- navegará até a url "https://dadosabertos.web.stj.jus.br/dataset/espelhos-de-acordaos-corte-especial"
+- clicará em todas as tags tipo "a" com xpath = "//*[@id="dataset-resources"]/ul/li[1]/div/ul/li[2]/a" variando index li[1] até o último elemento li[n] esperando entre cada tag clicada 3 segundos
+
+
+
+
+- processará todas as tags "li" que estiverem dentro da tag "ul" com xpath = "//*[@id="dataset-resources"]/ul"
+
+
+
+//*[@id="dataset-resources"]/ul/li[1]/div/ul/li[2]/a
+
+//*[@id="dataset-resources"]/ul/li[1]/div/ul/li[2]/a
+
+//*[@id="dataset-resources"]/ul/li[6]/div/ul/li[2]/a
+
+
+
+
+
+
+
+https://www.youtube.com/watch?v=BoADSiUV-2o&t=553s
+
+https://dadosabertos.web.stj.jus.br/dataset/espelhos-de-acordaos-corte-especial
+https://dadosabertos.web.stj.jus.br/dataset/espelhos-de-acordaos-primeira-secao
+https://dadosabertos.web.stj.jus.br/dataset/a96a175b-a54b-4bfd-82b8-fcd7cc0200bc/resource/39e57080-cb3f-433c-8b86-a7736632109a/download/20220508.zip
+https://dadosabertos.web.stj.jus.br/dataset/a96a175b-a54b-4bfd-82b8-fcd7cc0200bc/resource/c2c1d8cb-57bf-476b-ae7f-1dbaf9695b2b/download/dicionario-espelhodoacordao.csv
+https://dadosabertos.web.stj.jus.br/dataset/a96a175b-a54b-4bfd-82b8-fcd7cc0200bc/resource/583dbe44-bd05-4482-96bd-5bdbca597d87/download/20220531.json
+https://dadosabertos.web.stj.jus.br/dataset/espelhos-de-acordaos-segunda-secao
+https://dadosabertos.web.stj.jus.br/dataset/espelhos-de-acordaos-terceira-secao
+
+https://dadosabertos.web.stj.jus.br/dataset/espelhos-de-acordaos-primeira-turma
+https://dadosabertos.web.stj.jus.br/dataset/a927747a-2fc9-46f7-be25-c3f12e7d560c/resource/1d88761b-c332-4995-952a-da4aea58bc33/download/20220508.zip
+https://dadosabertos.web.stj.jus.br/dataset/a927747a-2fc9-46f7-be25-c3f12e7d560c/resource/70e2f52f-d0d7-465b-8bfe-d74ce85190b2/download/dicionario-espelhodoacordao.csv
+https://dadosabertos.web.stj.jus.br/dataset/a927747a-2fc9-46f7-be25-c3f12e7d560c/resource/c739326f-8727-4c1f-99e8-202232aef125/download/20220531.json
+https://dadosabertos.web.stj.jus.br/dataset/espelhos-de-acordaos-segunda-turma
+https://dadosabertos.web.stj.jus.br/dataset/espelhos-de-acordaos-terceira-turma
+https://dadosabertos.web.stj.jus.br/dataset/espelhos-de-acordaos-quarta-turma
+https://dadosabertos.web.stj.jus.br/dataset/espelhos-de-acordaos-quinta-turma
+https://dadosabertos.web.stj.jus.br/dataset/espelhos-de-acordaos-sexta-turma
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
