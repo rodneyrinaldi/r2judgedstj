@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
-# dw_processo_completo.py - Processo ETL para modelagem de Fato e Dimensões (STJ)
-# Implementa UPSERT nas tabelas de Fato e Bridge para evitar duplicação.
+# load-datalake.py - Processo ETL para modelagem de Fato e Dimensões (STJ)
+# Versão robusta para alto volume: Usa Cursors Separados e de Servidor com 'withhold=True'.
+
 import psycopg2
 import json
 import re
@@ -8,14 +9,14 @@ import os
 import sys
 import logging
 from datetime import datetime
-from typing import List, Dict, Any, Tuple, Set
+from typing import List, Dict, Any, Tuple
 
 # =================================================================
 # 1. CONFIGURAÇÕES, LOGGING E VARIÁVEIS GLOBAIS
 # =================================================================
 DB_CONFIG = {
     "host": "localhost",
-    "port": 5432,
+    "port": 5434,         # Porta mapeada para o judged_db (SQL Source)
     "dbname": "legal",
     "user": "admin",
     "password": "admin"
@@ -24,25 +25,19 @@ DB_CONFIG = {
 # Nomes das Tabelas
 TABELA_ORIGEM = "judged" 
 TABELA_FATO = "FATO_JULGADOS_STJ"
-TABELA_DIM_REF = "DIM_REFERENCIAS_LEGAIS" # Atua como Tabela Bridge
-TABELA_DIM_ASSUNTOS = "DIM_ASSUNTOS_STJ" # Atua como Tabela Bridge
+TABELA_DIM_REF = "DIM_REFERENCIAS_LEGAIS"
+TABELA_DIM_ASSUNTOS = "DIM_ASSUNTOS_STJ"
 
 # Configurações de Log
-PASTA_BASE = "" # Será definida em tempo de execução
+PASTA_BASE = r"D:\Sincronizado\tecnologia\data\stj-datalake" 
 LOG_FILE_NAME = "dw_etl_status.log"
-LOG_FILE = "" 
 logger = logging.getLogger(__name__)
 
 def _setup_environment(base_path: str):
-    """ 
-    Configura a PASTA_BASE global, cria a estrutura de pastas e configura o logger
-    para salvar o log de status DENTRO da pasta base.
-    """
-    global PASTA_BASE, LOG_FILE
-    
+    """ Configura o logger e a estrutura de pastas. """
+    global PASTA_BASE
     PASTA_BASE = base_path
     
-    # 1. Cria a pasta base se ela não existir
     if not os.path.exists(PASTA_BASE):
         try:
             os.makedirs(PASTA_BASE)
@@ -50,32 +45,26 @@ def _setup_environment(base_path: str):
             print(f"Erro Crítico: Não foi possível criar a pasta base '{PASTA_BASE}': {e}")
             sys.exit(1)
             
-    # 2. Define o caminho completo do log
     LOG_FILE = os.path.join(PASTA_BASE, LOG_FILE_NAME)
 
-    # 3. Configura o Logger para usar o caminho do log
     while logger.handlers:
         logger.handlers.pop()
     
     logger.setLevel(logging.INFO)
-    
-    # Adiciona StreamHandler para logs informativos no console
     logger.addHandler(logging.StreamHandler(sys.stdout))
     
-    # Adiciona FileHandler para logs de erro e status (dentro da PASTA_BASE)
     file_handler = logging.FileHandler(LOG_FILE, mode='a', encoding='utf-8')
     formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
     file_handler.setFormatter(formatter)
     logger.addHandler(file_handler)
     
     logger.info("-" * 80)
-    logger.info(f"Ambiente DW ETL configurado. Logs de status em: {LOG_FILE}")
-    logger.info(f"Tabelas de destino: Fato='{TABELA_FATO}', Dimensão 1='{TABELA_DIM_REF}', Dimensão 2='{TABELA_DIM_ASSUNTOS}'")
+    logger.info(f"Ambiente DW ETL configurado. Fonte SQL: {DB_CONFIG['host']}:{DB_CONFIG['port']}/{DB_CONFIG['dbname']}")
     logger.info("-" * 80)
 
 
 # =================================================================
-# 2. FUNÇÕES DE TRANSFORMAÇÃO (T) - Mantidas do original, adaptadas para o contexto
+# 2. FUNÇÕES DE TRANSFORMAÇÃO (T)
 # =================================================================
 
 def limpar_texto(texto: Any) -> str:
@@ -101,7 +90,7 @@ def extrair_data(data_string: str) -> datetime | None:
         try: return datetime.strptime(match_dj.group(1), '%d/%m/%Y').date()
         except ValueError: pass
             
-    try: return datetime.strptime(data_string, '%Y-%m-%d').date() # Tentativa de formato SQL
+    try: return datetime.strptime(data_string, '%Y-%m-%d').date()
     except ValueError: pass
             
     return None
@@ -130,7 +119,6 @@ def extrair_referencias_legais(refs_brutas: str, id_julgado: int) -> List[Dict[s
     for ref_dict in refs:
         norma_bruta = limpar_texto(ref_dict.get('referencia', ''))
         
-        # Lógica de extração... (simplificada para o contexto)
         match_tipo = re.search(r'LEG:FED (\w+):(\*+|[A-Z0-9]+)', norma_bruta)
         if match_tipo:
             tipo, nome_norma = match_tipo.groups()
@@ -177,17 +165,18 @@ def extrair_assuntos_e_teses(campos: Dict[str, str], id_julgado: int) -> List[Di
 def tratar_registro_etl(registro: Dict[str, Any], nomes_colunas: List[str]) -> Tuple[Dict[str, Any], List[Dict[str, Any]], List[Dict[str, Any]]]:
     """ Aplica todas as transformações ETL em um único registro. """
     
-    # Assume-se que 'id' na origem (Staging) corresponde a 'ID_JULGADO' no DW.
     try: id_julgado = int(registro.get("id")) 
     except (ValueError, TypeError): 
         try: id_julgado = int(registro.get("id_origem"))
         except (ValueError, TypeError):
-            logger.error(f"Registro sem ID numérico válido. Descartado: {registro}")
             return None, [], []
 
-    # 1. TRATAMENTO PARA A TABELA FATO
     registro_fato = {
         "ID_JULGADO": id_julgado,
+        # 🟢 CORREÇÃO: Mapeamento de ID_ORIGEM_NATURAL para resolver a restrição NOT NULL
+        # Usando o ID_JULGADO como fallback se o campo não existir ou for nulo.
+        "ID_ORIGEM_NATURAL": limpar_texto(registro.get("id_origem_natural", str(id_julgado))),
+        
         "DT_DECISAO": extrair_data(registro.get("dataDecisao", "")),
         "DT_PUBLICACAO": extrair_data(registro.get("dataPublicacao", "")),
         "CLASSE_SIGLA": limpar_texto(registro.get("siglaClasse")),
@@ -200,14 +189,11 @@ def tratar_registro_etl(registro: Dict[str, Any], nomes_colunas: List[str]) -> T
         "DECSIAO_TEOR_LIMPO": limpar_texto(registro.get("decisao")),
         "ACORDAOS_SIMILARES_LIMPO": limpar_texto(registro.get("acordaosSimilares")),
         "JURISPRUDENCIA_CITADA_LIMPA": limpar_texto(registro.get("jurisprudenciaCitada")),
-        # Mantém o JSON bruto para rastreabilidade (SCD Tipo 0)
-        "TEOR_BRUTO_JSON": json.dumps({k: registro[k] for k in nomes_colunas if k in registro}), 
+        "TEOR_BRUTO_JSON": json.dumps({k: registro[k] for k in nomes_colunas if k in registro}, default=str), 
     }
     
-    # 2. TRATAMENTO PARA DIM_REFERENCIAS_LEGAIS (Bridge)
     referencias_legais = extrair_referencias_legais(registro.get("referenciasLegislativas", "") or "", id_julgado)
-
-    # 3. TRATAMENTO PARA DIM_ASSUNTOS_STJ (Bridge)
+    
     campos_assuntos = {
         'tema': registro.get('tema'),
         'teseJuridica': registro.get('teseJuridica'),
@@ -218,13 +204,13 @@ def tratar_registro_etl(registro: Dict[str, Any], nomes_colunas: List[str]) -> T
     return registro_fato, referencias_legais, assuntos_segmentados
 
 # =================================================================
-# 3. CARREGAMENTO (L) e PROCESSO PRINCIPAL - COM UPSERT ADICIONAL
+# 3. CARREGAMENTO (L) e PROCESSO PRINCIPAL - COM CURSORS DUPLOS
 # =================================================================
 
 def inserir_em_lote(cursor, tabela: str, dados: List[Dict[str, Any]]):
     """ 
     Função auxiliar para inserção eficiente de múltiplos registros com lógica UPSERT (ON CONFLICT). 
-    A lógica ON CONFLICT é adaptada para cada tabela para garantir a unicidade.
+    Recebe um cursor SIMPLES (não nomeado).
     """
     if not dados: return
 
@@ -235,64 +221,105 @@ def inserir_em_lote(cursor, tabela: str, dados: List[Dict[str, Any]]):
     
     set_updates = ", ".join([f"{col} = EXCLUDED.{col}" for col in colunas])
     
+    chave_conflito = None
+
     if tabela == TABELA_FATO:
-        # Chave de Conflito: ID_JULGADO
         chave_conflito = "ID_JULGADO"
-        # Não atualiza ID_JULGADO e TEOR_BRUTO_JSON (chave primária e rastreabilidade)
         set_updates = ", ".join([f"{col} = EXCLUDED.{col}" for col in colunas if col not in [chave_conflito, 'TEOR_BRUTO_JSON']]) 
         
     elif tabela == TABELA_DIM_REF:
-        # Chave de Conflito Composta: Garante que a mesma referência não é duplicada para o mesmo julgado
-        # Assume-se que esta combinação é UNIQUE no DDL da tabela.
         chave_conflito = "ID_JULGADO_FK, TIPO_NORMA, NORMA_NOME, ARTIGO_DISPOSITIVO"
         
     elif tabela == TABELA_DIM_ASSUNTOS:
-        # Chave de Conflito Composta: Garante que o mesmo assunto/termo não é duplicado para o mesmo julgado
-        # Assume-se que esta combinação é UNIQUE no DDL da tabela.
         chave_conflito = "ID_JULGADO_FK, TIPO_ASSUNTO, TERMO"
         
-    else:
-        # Para outras tabelas, insere puro (APPEND)
-        comando_sql = f"INSERT INTO {tabela} ({colunas_sql}) VALUES ({placeholders});"
-        cursor.executemany(comando_sql, valores)
-        return
-
-    # Comando SQL com UPSERT (ON CONFLICT)
-    comando_sql = (
-        f"INSERT INTO {tabela} ({colunas_sql}) VALUES ({placeholders}) "
-        f"ON CONFLICT ({chave_conflito}) DO UPDATE SET {set_updates};"
-    )
     
+    if chave_conflito:
+        # Comando SQL com UPSERT (ON CONFLICT)
+        comando_sql = (
+            f"INSERT INTO {tabela} ({colunas_sql}) VALUES ({placeholders}) "
+            f"ON CONFLICT ({chave_conflito}) DO UPDATE SET {set_updates};"
+        )
+    else:
+        # Insere sem UPSERT
+        comando_sql = f"INSERT INTO {tabela} ({colunas_sql}) VALUES ({placeholders});"
+        
     cursor.executemany(comando_sql, valores)
+
+
+def _obter_contagem_total(conn) -> int:
+    """ Obtém o total de registros na tabela de origem para cálculo do progresso. """
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute(f"SELECT COUNT(*) FROM {TABELA_ORIGEM};")
+            # Verifica o resultado antes de acessar o índice
+            resultado = cursor.fetchone()
+            return resultado[0] if resultado and resultado[0] is not None else 0
+    except Exception as e:
+        logger.warning(f"Não foi possível obter a contagem total para progresso: {e}. Retornando 0.")
+        return 0
+
+def _exibir_progresso_console(lidos: int, total: int, inseridos_fato: int, lote_size: int):
+    """ Exibe o progresso na mesma linha do console usando \r. """
+    porcentagem = (lidos / total) * 100 if total > 0 else 0
+    
+    progress_str = (
+        f"🚀 Progresso: {porcentagem:.2f}% | Lidos: {lidos:,} / {total:,} "
+        f"| Inseridos (Fato): {inseridos_fato:,} | Tam. Lote: {lote_size}..."
+    )
+        
+    sys.stdout.write(f"\r{progress_str}")
+    sys.stdout.flush()
 
 
 def executar_etl_stj(base_path: str):
     """ Coordena o processo de Extração, Transformação e Carregamento (ETL). """
     
-    # 1. Configura ambiente de log
     _setup_environment(base_path)
     
     conn = None
+    read_cursor = None
+    write_cursor = None
     registros_lidos = 0
     registros_inseridos_fato = 0
+    TAMANHO_LOTE = 1000
+    total_registros = 0 
     
     try:
         # 2. CONEXÃO E EXTRAÇÃO (E)
         conn = psycopg2.connect(**DB_CONFIG)
         conn.autocommit = False
-        cursor = conn.cursor()
+        
+        total_registros = _obter_contagem_total(conn)
+        
+        # Criação de DOIS cursors separados
+        write_cursor = conn.cursor() 
+        read_cursor = conn.cursor(name="etl_stj_cursor", withhold=True)
 
-        cursor.execute(f"SELECT * FROM {TABELA_ORIGEM} LIMIT 0;")
-        nomes_colunas = [desc[0] for desc in cursor.description]
+        # Obtém os nomes das colunas
+        temp_cursor = conn.cursor()
+        temp_cursor.execute(f"SELECT * FROM {TABELA_ORIGEM} LIMIT 0;")
+        nomes_colunas = [desc[0] for desc in temp_cursor.description]
+        temp_cursor.close()
 
-        logger.info(f"Iniciando Extração de dados da tabela Staging: {TABELA_ORIGEM}")
-        cursor.execute(f"SELECT * FROM {TABELA_ORIGEM};")
+        logger.info(f"Iniciando Extração de dados da tabela Staging: {TABELA_ORIGEM} (Total: {total_registros:,})")
+        
+        # O SELECT longo usa o cursor nomeado (read_cursor)
+        read_cursor.execute(f"SELECT * FROM {TABELA_ORIGEM};")
         
         lote_fato, lote_dim_ref, lote_dim_assuntos = [], [], []
 
-        for linha_bruta in cursor:
+        for linha_bruta in read_cursor: # Itera usando o cursor de leitura
             registros_lidos += 1
+            
+            # 🟢 CORREÇÃO CRÍTICA: Verifica se a linha lida é None antes de tentar desempacotar
+            if linha_bruta is None:
+                logger.warning(f"Registro Nulo encontrado na iteração {registros_lidos}. Pulando.")
+                continue
+
             registro_dict = dict(zip(nomes_colunas, linha_bruta))
+            
+            _exibir_progresso_console(registros_lidos, total_registros, registros_inseridos_fato, len(lote_fato))
 
             # 3. TRANSFORMAÇÃO (T)
             registro_fato, referencias_legais, assuntos_segmentados = tratar_registro_etl(registro_dict, nomes_colunas)
@@ -303,37 +330,57 @@ def executar_etl_stj(base_path: str):
                 lote_dim_assuntos.extend(assuntos_segmentados)
 
             # 4. CARREGAMENTO (L) - Inserção em lote
-            if len(lote_fato) >= 1000:
-                inserir_em_lote(cursor, TABELA_FATO, lote_fato)
-                inserir_em_lote(cursor, TABELA_DIM_REF, lote_dim_ref)
-                inserir_em_lote(cursor, TABELA_DIM_ASSUNTOS, lote_dim_assuntos)
+            if len(lote_fato) >= TAMANHO_LOTE:
+                
+                inserir_em_lote(write_cursor, TABELA_FATO, lote_fato)
+                inserir_em_lote(write_cursor, TABELA_DIM_REF, lote_dim_ref)
+                inserir_em_lote(write_cursor, TABELA_DIM_ASSUNTOS, lote_dim_assuntos)
                 
                 conn.commit()
+                
                 registros_inseridos_fato += len(lote_fato)
-                logger.info(f"Lote commitado. Registros lidos: {registros_lidos}. Fato inserido/atualizado: {registros_inseridos_fato}")
+                
+                _exibir_progresso_console(registros_lidos, total_registros, registros_inseridos_fato, 0)
+                sys.stdout.write('\n') 
+                logger.info(f"Lote commitado. Total inserido/atualizado (Fato): {registros_inseridos_fato:,}")
                 
                 lote_fato, lote_dim_ref, lote_dim_assuntos = [], [], []
-        
+                
         # Insere os lotes restantes
         if lote_fato:
-            inserir_em_lote(cursor, TABELA_FATO, lote_fato)
-            inserir_em_lote(cursor, TABELA_DIM_REF, lote_dim_ref)
-            inserir_em_lote(cursor, TABELA_DIM_ASSUNTOS, lote_dim_assuntos)
+            inserir_em_lote(write_cursor, TABELA_FATO, lote_fato)
+            inserir_em_lote(write_cursor, TABELA_DIM_REF, lote_dim_ref)
+            inserir_em_lote(write_cursor, TABELA_DIM_ASSUNTOS, lote_dim_assuntos)
             registros_inseridos_fato += len(lote_fato)
-        
+            
         conn.commit()
         
+        _exibir_progresso_console(registros_lidos, total_registros, registros_inseridos_fato, 0)
+        sys.stdout.write('\n')
+        
         logger.info("\n--- ETL PARA DATA WAREHOUSE CONCLUÍDO ---")
-        logger.info(f"Total de registros lidos da Staging: {registros_lidos}")
-        logger.info(f"Total de registros de Fato inseridos/atualizados: {registros_inseridos_fato}")
+        logger.info(f"Total de registros lidos da Staging: {registros_lidos:,}")
+        logger.info(f"Total de registros de Fato inseridos/atualizados: {registros_inseridos_fato:,}")
 
     except (Exception, psycopg2.Error) as error:
         logger.critical(f"ERRO CRÍTICO DURANTE O ETL: {error}")
         if conn: conn.rollback()
             
     finally:
+        # Tratamento de erro robusto no finally para o InvalidCursorName
+        if read_cursor:
+            try:
+                read_cursor.close()
+            except psycopg2.ProgrammingError: 
+                pass 
+        
+        if write_cursor:
+            try:
+                write_cursor.close()
+            except psycopg2.ProgrammingError:
+                pass
+                
         if conn:
-            cursor.close()
             conn.close()
             logger.info("Conexão com o banco de dados fechada.")
 
@@ -341,12 +388,4 @@ def executar_etl_stj(base_path: str):
 # 4. EXECUÇÃO
 # =================================================================
 if __name__ == '__main__':
-    
-    pasta_base_input = input("Digite o caminho da PASTA BASE para LOGS de DW (padrão: ./dw_logs): ").strip()
-    if not pasta_base_input:
-        pasta_base_input = os.path.join(os.getcwd(), "dw_logs")
-
-    if os.path.isdir(pasta_base_input) or os.path.exists(pasta_base_input) or not os.path.exists(pasta_base_input):
-        executar_etl_stj(pasta_base_input)
-    else:
-        print(f"O caminho fornecido não é válido: {pasta_base_input}")
+    executar_etl_stj(PASTA_BASE)
