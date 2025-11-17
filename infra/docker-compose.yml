@@ -1,0 +1,65 @@
+version: '3.8'
+
+services:
+  # 1. Banco de dados de dados brutos/transacionais (Dados Persistentes)
+  judged_db:
+    image: postgres:13
+    container_name: judged_db
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin
+      POSTGRES_DB: legal
+    ports:
+      - "5434:5432"
+    volumes:
+      # Volume para persistência do PostgreSQL 13
+      - ../../../../Sincronizado/tecnologia/data/stj-postgres:/var/lib/postgresql/data
+    restart: always
+  
+  # 2. Banco de dados Vetorizado (Dados Persistentes)
+  judged_llm_db:
+    image: pgvector/pgvector:pg16 
+    container_name: judged_llm_db
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin
+      POSTGRES_DB: vector_storage 
+    ports:
+      - "5433:5432"
+    volumes:
+      # Volume para persistência do PGVector
+      - ../../../../Sincronizado/tecnologia/data/stj-postgres-llm:/var/lib/postgresql/data 
+    restart: always
+
+  # 3. Serviço LLM - Ollama (Modelos Persistentes)
+  ollama:
+    image: ollama/ollama
+    container_name: ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      # Volume para persistência dos modelos LLM (llama3, embeddings, etc.)
+      - ../../../../Sincronizado/tecnologia/data/stj-ollama-models:/root/.ollama
+    # command: pull llama3
+    restart: always
+
+  # 4. Agente Especialista Python (Código no Raiz)
+  specialist_agent:
+    # O build agora usa o contexto do diretório atual (raiz)
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: specialist_agent
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql://admin:admin@judged_llm_db:5432/vector_storage
+      LLM_API_URL: http://ollama:11434
+      # Opcional: Variável para o modelo de embedding
+      EMBEDDING_MODEL: nomic-embed-text 
+    # Não precisamos de um volume de código, pois ele já está incluído no build.
+    depends_on:
+      - judged_llm_db
+      - ollama
+    # command: pull nomic-embed-text
+    restart: always

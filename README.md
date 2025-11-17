@@ -1,8 +1,21 @@
-Segue o arquivo `README.md` atualizado com todas as orientações, incluindo as novas configurações do banco de dados, processamento de dados processuais, e uso para análises detalhadas e RAG (Retrieval-Augmented Generation).
-
----
-
+```
 ### `README.md`
+
+py --list
+py -3.12 -m venv venv
+.\venv\Scripts\activate
+python.exe -m pip install --upgrade pip
+pip freeze > requirements.txt
+pip install -r requirements.txt
+
+docker-compose up judged_llm_db ollama -d
+uvicorn agent_app:app --reload
+
+http://127.0.0.1:8000/docs
+{
+  "query": "Quando um juiz pode usar a analogia na decisão?"
+}
+
 
 ```markdown
 # Processador de Acórdãos com PostgreSQL e Vetores

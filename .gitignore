@@ -1,0 +1,85 @@
+# 🐍 Python
+
+# Byte-compiled / optimized / test coverage files
+__pycache__/
+*.py[cod]
+*$py.class
+*.mo
+*.egg
+*.egg-info/
+dist/
+build/
+venv/
+.venv/
+.pytest_cache/
+.coverage
+
+# Dependencies
+# Ambiente virtual (virtual environment)
+# Garante que as dependências instaladas (que podem ser grandes) não sejam commitadas
+/venv
+/env
+/bin
+/include
+/lib
+/lib64
+/share
+
+# Logs e Dados
+*.log
+*.sqlite
+/data
+/tmp
+/temp
+/uploads
+
+# Editor/OS Temporary Files
+.DS_Store
+.vscode/
+*.swp
+*~
+.idea/
+
+---
+
+# 🐘 PostgreSQL
+
+# Arquivos de configuração específicos do ambiente de desenvolvimento
+# O arquivo de produção geralmente tem credenciais, então ele deve ser ignorado.
+# Recomenda-se usar variáveis de ambiente ou um arquivo de configuração fora do repo.
+config.local.json
+.env
+.env.local
+
+# Se você estiver usando um banco de dados local para desenvolvimento:
+db.sqlite3
+/pg_data/
+/data/postgres/
+
+---
+
+# 🤖 Ollama (Modelos de Linguagem Local)
+
+# Os modelos do Ollama podem ser GIGANTES, com dezenas de GBs.
+# Ignorar a pasta de modelos é crucial.
+# O local padrão de armazenamento dos modelos do Ollama é:
+# Linux/macOS: ~/.ollama/models
+# Windows: C:\Users\<user>\.ollama\models
+# Como o projeto pode estar configurado para usar um diretório local:
+/ollama_models/
+/models/
+
+# Arquivos de dados de sessão/cache
+ollama_cache/
+ollama_data/
+
+---
+
+# 🔑 Segredos e Credenciais
+
+# Arquivos que contêm senhas ou chaves de API.
+# O arquivo .env é o mais comum para guardar credenciais,
+# mas se você usar outros, adicione-os aqui.
+secrets.yml
+credentials.ini
+config/
